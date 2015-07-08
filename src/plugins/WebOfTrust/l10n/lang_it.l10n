@@ -1,6 +1,5 @@
 Common.Never=Mai
 Common.SizeLimitExceededException=La lunghezza limite di ${limit} è stata superata.
-Common.UnknownIdentityExceptionDescription=L'identità a cui hai tentato di accedere non esiste più. Se era una tua identità potresti averla cancellata. In questo caso, esegui il login con un'altra. Se era una identità remota, potrebbe essere stata cancellata per mancanza di affidabilità.\nIl suo ID era ${identityID} (non rivelare questo ID se vuoi mantenere la tua identità privata)
 Common.UnknownIdentityExceptionTitle=Identità sconosciuta
 CommonWebUtils.daysAgo=${days}gg. fa
 CommonWebUtils.daysHoursAgo=${days}gg. ${hours}h fa

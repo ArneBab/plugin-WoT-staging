@@ -1,7 +1,6 @@
 Common.Never=Ei koskaan
 Common.No=Ei
 Common.SizeLimitExceededException=Pituusraja ${limit} ylittyi.
-Common.UnknownIdentityExceptionDescription=Identiteettiä ei ole enää olemassa. Jos se oli oma identiteettisi, olet saattanut poistaa sen. Tässä tapauksessa sinun tulee kirjautua sisään toisella identiteetillä. Jos se oli ulkopuolinen identiteetti, on se voitu poistaa puuttuvan luottamuksen takia. Identiteetin tunniste oli: ${identityID} (pidä tämä salassa ellet halua paljastaa kuka olet).
 Common.UnknownIdentityExceptionTitle=Tuntematon identiteetti
 CommonWebUtils.daysAgo=${days}pv sitten
 CommonWebUtils.daysHoursAgo=${days}pv ${hours}h sitten

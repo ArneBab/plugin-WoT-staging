@@ -1,6 +1,5 @@
 Common.Never=Aldri
 Common.No=Nei
-Common.UnknownIdentityExceptionDescription=Identiteten som du prøver å benytte deg av finnes ikke lenger. Visst det var en av dine egne identiteter så kan det hende du har slettet den - da må du logge inn med en annen en. Visst det var en ekstern identitet, så kan det hende den har mistet sin tillitt. Id'en den sin var: ${identityID} (hold dette privat om du ikke vil avsløre hvem du er).
 Common.UnknownIdentityExceptionTitle=Ukjent identitet
 CommonWebUtils.daysAgo=${days}d siden
 CommonWebUtils.daysHoursAgo=${days}d ${hours}t siden

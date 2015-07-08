@@ -1,7 +1,6 @@
 Common.Never=从未
 Common.No=否
 Common.SizeLimitExceededException=已超过长度限制 ${limit}。
-Common.UnknownIdentityExceptionDescription=您尝试访问的身份已经不存在了。如果这曾经是您的身份之一，您可能已经删除了它 - 那么您需要用另一个身份登录。如果这是一个远程身份，它可能是由于缺少信任而已被删除。其 ID 为：${identityID}（请保持私密，如果你不想透露你是谁）。
 Common.UnknownIdentityExceptionTitle=未知身份
 CommonWebUtils.daysAgo=${days}天前
 CommonWebUtils.daysHoursAgo=${days}天${hours}小时前

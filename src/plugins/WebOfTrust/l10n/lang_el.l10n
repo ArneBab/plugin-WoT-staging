@@ -1,7 +1,6 @@
 Common.Never=Ποτέ
 Common.No=Όχι
 Common.SizeLimitExceededException=Το εύρος του ορίου του ${limit} έχει ξεπεραστεί.
-Common.UnknownIdentityExceptionDescription=Η ταυτότητα στην οποία προσπαθείτε να αποκτήσετε πρόσβαση δεν υπάρχει πλέον. Αν ήταν μια από τις δικές σας ταυτότητες, μπορεί να την έχετε διαγράψει - σε αυτή την περίπτωση πρέπει να συνδεθείτε με μια διαφορετική ταυτότητα. Αν ήταν απομακρυσμένη ταυτότητα, μπορεί να έχει διαγραφεί λόγω χαμένου διαπιστευτικού. Το ID του ήταν: ${identityID} (αυτό κρατήστε το κρυφό αν δεν θέλετε να αποκαλύψετε ποιός είστε).
 Common.UnknownIdentityExceptionTitle=Άγνωστη ταυτότητα
 CommonWebUtils.daysAgo=${days}d πριν
 CommonWebUtils.daysHoursAgo=${days}d ${hours}h πριν

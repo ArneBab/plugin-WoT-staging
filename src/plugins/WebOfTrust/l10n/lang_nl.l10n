@@ -1,7 +1,6 @@
 Common.Never=Nooit
 Common.No=Nee
 Common.SizeLimitExceededException=De maximale lengte van ${limit} is overschreden.
-Common.UnknownIdentityExceptionDescription=Het pseudoniem waartoe je toegang probeerde te verkrijgen bestaat niet meer. Als het een van je eigen pseudoniemen was, heb je het misschien verwijderd - dan moet je inloggen met een ander pseudoniem. Als het een extern pseudoniem was, is het misschien verwijderd omwille van ontbrekend vertrouwen. Het ID was: ${identityID} (hou dit privé als je niet wil onthullen wie je bent).
 Common.UnknownIdentityExceptionTitle=Onbekend pseudoniem
 CommonWebUtils.daysAgo=${days}d geleden
 CommonWebUtils.daysHoursAgo=${days}d ${hours}u geleden

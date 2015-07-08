@@ -1,7 +1,6 @@
 Common.Never=Nigdy
 Common.No=Nie
 Common.SizeLimitExceededException=Długość limitu ${limit} została przekroczona.
-Common.UnknownIdentityExceptionDescription=Tożsamość, którą chciałeś otworzyć już nie istnieje. Jeżeli była jedną z Twoich tożsamości to może ją skasowałeś - musisz w takim razie zalogować się inną tożsamością. Jeżeli była to zdalna tożsamość to może została skasowana z powodu brakującego zaufania. Jej ID to: ${identityID} (zachowaj ją dla siebie jeśli nie chcesz zdradzać kim jesteś).
 Common.UnknownIdentityExceptionTitle=Nieznana tożsamość
 CommonWebUtils.daysAgo=${days}d temu
 CommonWebUtils.daysHoursAgo=${days}d ${hours}h temu
