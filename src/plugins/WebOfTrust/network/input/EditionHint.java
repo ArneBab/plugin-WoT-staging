@@ -136,13 +136,17 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 	 * valuable due to the USK subscriptions of {@link IdentityDownloaderFast} - which is why
 	 * we sort by capacity first as aforementioned.
 	 * 
-	 * Furthermore, sorting by capacity is critical to ensure the most "stable" behavior of WoT
-	 * - where "stable" means that the results of {@link Score} computation should not depend on
+	 * Furthermore, sorting by capacity is critical to ensure the "stable" behavior of {@link Score}
+	 * computation - where "stable" means that the results of Score computation should not depend on
 	 * order of download:
 	 * The higher the capacity of an Identity, the more voting power it has in {@link Score}
 	 * computation. As identities with higher capacity can give higher capacity = voting power to
 	 * their trustees, by preferring to download hints with higher capacity, we prefer to download
-	 * the identities with the highest potential voting power first.
+	 * the identities with the highest potential voting power first.  
+	 * See the comments inside of {@link WebOfTrust#shouldFetchIdentity(Identity)} for a detailed
+	 * explanation of the concept of stability.
+	 * FIXME: I'm hopefully capable of explaining the issue with stability in a more easy to
+	 * understand fashion. Do so!
 	 * 
 	 * The next fallback sorting key after this one is {@link #mSourceScore}.
 	 * It is also ensured that fallback will actually happen:
@@ -197,6 +201,7 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 	 * (The most efficient storage for this would be byte[], but IIRC db4o does not handle that as
 	 * well as String.)
 	 * 
+	 * @see #computePriority(WebOfTrust, Date, byte, int, String, long)
 	 * @see #compareTo_ReferenceImplementation(EditionHint)
 	 * @see #compareTo(EditionHint) */
 	@IndexedField
@@ -309,8 +314,16 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		return mTargetIdentity.getRequestURI().setSuggestedEdition(mEdition).sskForUSK();
 	}
 
+	/** @see #mPriority */
 	private static String computePriority(WebOfTrust wot, Date roundedDate, byte capacity,
 			int roundedScore, String targetID, long edition) {
+		
+		// For detailed explanations of the reasons behind the order in which we put things into the
+		// resulting priority, see the JavaDoc of the member variables of class EditionHint.
+		// TODO: Code quality: Rename our parameters to match their naming more closely.
+		// TODO: Code quality: Perhaps the JavaDoc should be copied/moved to
+		// compareTo_ReferenceImplementation(), and we should point to that function for
+		// documentation instead. Also see the related TODO there.
 		
 		assert(roundedDate.equals(roundToNearestDay(roundedDate)));
 		assert(capacity >= MIN_CAPACITY && capacity <= 100);
@@ -326,6 +339,30 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		// bruteforce public-key generation to get an ID of "aaaa..." in order to maliciously get
 		// a higher priority.
 		// To prevent that, we encrypt the ID with a local, non-public random pad.
+		// IMHO we don't need a good encryption here and thus don't use one because:
+		// - the only thing which an outsider can use to guess the key is the order in which we
+		//   download Identitys. But Freenet is supposed to make our downloading anonymous so it's
+		//   already difficult enough to observe what we download in the first place.
+		// - the only incentive for cracking the key is that it would allow an attacker to specially
+		//   craft their Identity ID so their Identity would be downloaded more quickly by a single
+		//   target Identity. But that is a rather weak incentive because it only affects a single
+		//   target *and* that target would already download the malicious Identity anyway if it is
+		//   eligible to have its EditionHints queued for download, and that eligibility is required
+		//   for the attack to work. So the attacker really only would get downloaded more quickly,
+		//   notably the decision of whether to download them at all is not affected.
+		// - Gaining priority in terms being downloaded more quickly also is useless because it does
+		//   *not* allow a malicious Identity to block the download of another Identity by
+		//   distrusting them faster than positive Trusts for them can be downloaded from elsewhere,
+		//   the mechanism of capacity was specifically designed to prevent such "which Trust do we
+		//   download first?" race conditions. It ensures that the order in which we download
+		//   Identitys does not affect the result of Score computation, this concept is named
+		//   "stability" in its terms. See the comments inside of WebOfTrust.shouldFetchIdentity()
+		//   for a detailed explanation of that concept. Also see the JavaDoc of mSourceCapacity for
+		//   why we must use it as a top sorting key here to ensure the mechanism works.
+		// NOTICE: The poor encryption here isn't the only such race condition, using a better one
+		// will *not* void the need for capacity as priority! Instead, the very nature of network
+		// traffic is that we will download Identitys and thereby Trust values in random order, so
+		// a mechanism to prevent race conditions must always exist.
 		targetID = encryptIdentityID(wot, targetID);
 		
 		int length = 8 + 3 + 1 + IdentityID.LENGTH + 19;
@@ -342,6 +379,11 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		return sb.toString();
 	}
 
+	/** WARNING: This is not a real encryption: The random pad it uses is re-used for each input.  
+	 *  It merely aims to sufficiently randomize the ID to ensure the low security constraints of
+	 *  {@link #computePriority(WebOfTrust, Date, byte, int, String, long)} are met.  
+	 *  See the comment inside that function for an explanation.  
+	 *  TODO: Code quality: Rename to obfuscate*() to make this more apparent. */
 	static String encryptIdentityID(WebOfTrust keyProvider, String id) {
 		byte[] idBytes;
 		try {
@@ -362,10 +404,12 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		return Base64.encode(idBytes);
 	}
 
+	/** @see #encryptIdentityID(WebOfTrust, String) */
 	static String decryptIdentityID(WebOfTrust keyProvider, String id) {
 		return encryptIdentityID(keyProvider, id);
 	}
 
+	/** @see #mPriority */
 	private String getPriority() {
 		// String is a db4o primitive type so 1 is enough even though it is a reference type
 		checkedActivate(1);
@@ -391,10 +435,20 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		this.activateFully();
 		o.activateFully();
 		
+		// For detailed explanations of the reasons behind the order in which we compare things, see
+		// the JavaDoc of the member variables which are being compared.
+		// TODO: Code quality: Perhaps it should be copied/moved here? Also see the related TODO in
+		// computePriority().
+		
 		int dateCompared = mDate.compareTo(o.mDate);
 		if(dateCompared != 0)
 			return dateCompared;
 		
+		// Compare capacity before the Score because better capacity *must* gain higher download
+		// priority than the Score to ensure Score computation has the property of being independent
+		// of the order of downloading Identitys = the order of obtaining Trust values, a concept
+		// called "stability" in its context.  
+		// See the JavaDoc of mSourceCapacity for an explanation.
 		int capacityCompared = Byte.compare(mSourceCapacity, o.mSourceCapacity);
 		if(capacityCompared != 0)
 			return capacityCompared;
@@ -428,9 +482,11 @@ public final class EditionHint extends Persistent implements Comparable<EditionH
 		// it will return the result of comparing the ID substrings
 		// - so overall we must do that here in the non-optimized (= non-String based) sorting
 		// function as well.
-		// Notice: We don't use the actual ID but encrypt it with a persistent, random key to
+		// Notice: We don't use the actual ID but pseudo-encrypt it with a persistent, random key to
 		// to prevent attackers from maliciously brute forcing pubkey generation to get a hash with
 		// prefix "aaaa..." to boost priority of their identity.
+		// See the large comment in computePriority() for why the poor encryption we use is good
+		// enough for this usecase.
 		
 		/*
 		if(mTargetIdentity.getID().equals(o.mTargetIdentity.getID()))
