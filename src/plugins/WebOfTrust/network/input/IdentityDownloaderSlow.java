@@ -638,6 +638,19 @@ public final class IdentityDownloaderSlow implements
 				//   a faster discovery of all remote identities because the more trust lists we
 				//   download from different identities the higher the chance of discovering new
 				//   ones in them.
+				// - Because we download more diverse trust lists we also might get more fresh hints
+				//   from the more various Identitys we download and thus a higher chance of
+				//   avoiding usage of obsolete edition hints, i.e. hints for editions which
+				//   are lower than the actual most recent edition of an Identity.
+				//   (This is a weak conclusion though because EditionHint.getPriority(), which
+				//   sorts our download queue, uses the hint's date as the first sorting key so old
+				//   hints will be deferred anyway.
+				//   Notice that even though currently this is the date when they were gathered from
+				//   trust lists and thus is mostly the same for new databases and thereby the
+				//   deferring is voided, in a near update remote Identitys will be allowed to
+				//   propagate the date on which they observed a hint to ensure usage of old hints
+				//   is indeed deferred. Nevertheless lets document this here for future
+				//   considerations.)
 				// (We could avoid having to ignore the Identitys here by instead ensuring that
 				// no EditionHints are stored which have almost the same priority as others.
 				// However ignoring them here is a lot easier than changing the storage
@@ -690,6 +703,10 @@ public final class IdentityDownloaderSlow implements
 					// Instead the hint will stay in the queue until the IdentityFileProcessor
 					// imports the edition from disk - and it delays that for 1 minute for batch
 					// processing typically, so much re-downloading could happen during that time.
+					//
+					// In addition this has the same positive effects as those of ignoring Identitys
+					// for which there is a running download, they had been explained in a long
+					// comment some lines above.
 					if(mOutputQueue.containsAnyEditionOf(h.getURI())) {
 						// Opportunistically cache `containsAnyEditionOf() == true` via our
 						// identitiesToIgnore HashSet so we can skip further EditionHints for the
@@ -891,6 +908,14 @@ public final class IdentityDownloaderSlow implements
 	@Override public void onSuccess(FetchResult result, ClientGetter state) {
 		// Count it before doing anything else to ensure breakage in the processing is apparent by
 		// mismatching numbers on the web interface.
+		// FIXME: This causes downloads to stall in memory while the IdentityFileProcessor is busy
+		// holding the lock for a long time. Avoiding that was the whole purpose of implementing
+		// the IdentityFile(Disk)Queue, its idiotic that I am voiding that whole large piece of work
+		// for the trivial purpose of counting this number!
+		// Instead do it after storing the download to the IdentityFileQueue, or use an
+		// AtomicInteger like IdentityDownloaderFast does in onFound() so we don't need a lock.
+		// And anyway: The proper approach to counting failures as well is to use the finally{}
+		// block!
 		synchronized(mLock) {
 			++mSucceededDownloads;
 		}

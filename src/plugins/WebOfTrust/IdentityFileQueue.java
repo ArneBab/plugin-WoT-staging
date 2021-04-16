@@ -129,7 +129,11 @@ public interface IdentityFileQueue {
 	 *  might be rather slow! */
 	public boolean containsAnyEditionOf(FreenetURI identityFileURI);
 
-	/** NOTICE: While add() will always succeed even if {@link #getSizeSoftLimit()} is violated you
+	/** Adds the file and calls {@link BackgroundJob#triggerExecution()} upon the event handler
+	 *  which has been registered using {@link #registerEventHandler(BackgroundJob)}.  
+	 *  Typically this will be the {@link IdentityFileProcessor}.
+	 * 
+	 *  NOTICE: While add() will always succeed even if {@link #getSizeSoftLimit()} is violated you
 	 *  should nevertheless try to control the amount of files you add() as specified at
 	 *  getSizeSoftLimit().
 	 *  
@@ -186,7 +190,7 @@ public interface IdentityFileQueue {
 
 	/**
 	 * Registers a {@link BackgroundJob} whose {@link BackgroundJob#triggerExecution()} shall be
-	 * called by the queue once an element is available for the job to {@link #poll()}.<br><br>
+	 * called by the queue once at least one element is available for the job to {@link #poll()}.  
 	 * 
 	 * Will also trigger the execution of the handler if the queue already contains files. This
 	 * can happen if the queue is capable of preserving files across restarts, or if this function

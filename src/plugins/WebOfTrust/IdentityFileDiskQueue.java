@@ -28,8 +28,11 @@ import freenet.support.Logger.LogLevel;
  * marked as finished by {@link IdentityFileStreamWrapper#close()} the file will be lost.  
  * Thus users of this implementation must be safe against complete loss of the queue across
  * restarts.  
- * This is also demanded by the JavaDoc of the interface {@link IdentityFileQueue} for sophisticated
- * reasons.
+ * This is also demanded by the JavaDoc of the interface {@link IdentityFileQueue} for other, more
+ * sophisticated reasons which are NOT merely an implementation detail, it thus **must stay as
+ * is**!  
+ * TODO: Usability: Write a text file to the root dir of the queue which tells the user that it
+ * is safe to delete the queue and it thus does not have to be included in backups.
  * 
  * Deduplicating queue: Only the latest edition of each file is returned; see
  * {@link IdentityFileQueue} for details.<br>
@@ -376,6 +379,11 @@ final class IdentityFileDiskQueue implements IdentityFileQueue {
 	}
 
 	@Override public synchronized IdentityFileStreamWrapper poll() {
+		// Concurrent processing of files returned by poll() is not allowed, as specified in the
+		// parent interface. So mProcessingFiles should be 0 here unless the user violated that, or
+		// forgot to call close() upon a previously returned IdentityFileStreamWrapper.
+		assert(mStatistics.mProcessingFiles == 0);
+		
 		File[] queue = mQueueDir.listFiles();
 		assert(queue.length == mStatistics.mQueuedFiles);
 		
@@ -517,7 +525,11 @@ final class IdentityFileDiskQueue implements IdentityFileQueue {
 				}
 			}
 		}
-		
+
+		@Override protected void finalize() {
+			assert(mClosedAlready) : "Error: close() was not called!";
+		}
+
 		/** Must be called while synchronized(IdentityFileDiskQueue.this) */
 		private void deleteFile() {
 			if(logMINOR)
