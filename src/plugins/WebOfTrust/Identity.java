@@ -307,6 +307,10 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 		
 		try {
 			// We only use the passed edition number as a hint to prevent attackers from spreading bogus very-high edition numbers.
+			// FIXME: mLatestEditionHint is ignored by the new IdentityDownloader API, EditionHint
+			// objects have to be created instead.
+			// Review all callers of this constructor for whether they store an EditionHint object
+			// when they should and pass it to the IdentityDownloaderController then.
 			mLatestEditionHint = Math.max(newRequestURI.getEdition(), 0);
 		} catch (IllegalStateException e) {
 			mLatestEditionHint = 0;
@@ -620,6 +624,13 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
         mRequestURIString = requestURI.toString();
 
 		// TODO: I decided that we should not decrease the edition hint here. Think about that again.
+		// FIXME: This needs to be reconsidered for the new IdentityDownloader API since it uses
+		// external EditionHint objects which are stored in the database to track hints.
+		// It will likely be dealt with by adding a callback to the interface IdentityDownloader
+		// which is called by any code which calls markForRefetch() and thus decreaseEdition(), so
+		// decreaseEdition() needs not do anything with the new API either. And it mustn't do
+		// anything even since the EditionHint object database is managed by the
+		// IdentityDownloaderSlow, outside classes must not interfere with it.
 	}
 	
 	/**
@@ -641,9 +652,30 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 		checkedActivate(1);
 		// checkedActivate(mCurrentEditionFetchState, 1); not needed, it has no members
 		
+		// TODO: Code quality: Replace the below with switch() statement.
+		
 		if (mCurrentEditionFetchState == FetchState.Fetched) {
 			mCurrentEditionFetchState = FetchState.NotFetched;
 		} else {
+			// The current edition won't be eligible for refetching because it is either not
+			// fetchable or not parseable, so try the previous one.
+			// TODO: Is the NotFetched meaning it is not fetchable actually possible? We don't set
+			// it on DataNotFound for sure so it could only happen if something increments the
+			// edition after a previous one was fetched. But that isn't done anywhere either I
+			// think.
+			// Still it's probably better to just assume it is not fetchable: The worst which can
+			// happen is that we download two editions instead of one, which doesn't hurt given
+			// that markForRefetch() won't be used a lot. And in turn the code is more robust
+			// against changes of how mCurrentEditionFetchState is populated by outside code.
+			
+			assert(mCurrentEditionFetchState == FetchState.NotFetched
+			    || mCurrentEditionFetchState == FetchState.ParsingFailed);
+			
+			// FIXME: build0020 did not handle ParsingFailed. Investigate if database upgrade code
+			// is needed to fix this.
+			if(mCurrentEditionFetchState == FetchState.ParsingFailed)
+				mCurrentEditionFetchState = FetchState.NotFetched;
+			
 			decreaseEdition();
 		}
 	}
