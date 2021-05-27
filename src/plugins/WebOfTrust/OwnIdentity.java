@@ -10,6 +10,8 @@ import java.net.MalformedURLException;
 import java.util.Date;
 
 import plugins.WebOfTrust.exceptions.InvalidParameterException;
+import plugins.WebOfTrust.network.input.EditionHint;
+import plugins.WebOfTrust.network.input.IdentityDownloaderController;
 import freenet.keys.FreenetURI;
 import freenet.support.CurrentTimeUTC;
 import freenet.support.Logger;
@@ -47,11 +49,33 @@ public final class OwnIdentity extends Identity implements Cloneable, Serializab
 	/**
 	 * Creates a new OwnIdentity with the given parameters.
 	 * 
-	 * @param insertURI A {@link FreenetURI} used to insert this OwnIdentity in Freenet
-	 * @param nickName The nickName of this OwnIdentity
+	 * @param insertURI A {@link FreenetURI} used to insert this OwnIdentity in Freenet.  
+	 *    **NOTICE:** The edition of it is NOT used to initialize the edition of this Identity!  
+	 *    It will always be initialized to 0.  
+	 *    You must manually take care of:
+	 *    - using {@link #restoreEdition(long, Date)} if a pre-existing OwnIdentity is being
+	 *      restored from the network and it can be guaranteed that the edition exists, e.g. if it
+	 *      has been downloaded previously or provided by the user.
+	 *    - passing the edition as {@link EditionHint} to the {@link IdentityDownloaderController}.
+	 *    
+	 *    The reason for initializing to 0 is security: It prevents remote peers from maliciously
+	 *    causing an Identity to never be downloaded by publishing a very high, non-existent edition
+	 *    in their trust list.  
+	 *    Yes, OwnIdentitys technically cannot be created by receiving a remote Trust value, but
+	 *    only by user action instead. But the user can use
+	 *    {@link WebOfTrust#restoreOwnIdentity(FreenetURI)} which *will* typically run into
+	 *    pre-existing non-own versions of the Identity in the database which we've obtained
+	 *    from the network. And it *will* re-use the remote URI's edition as a hint, so it might
+	 *    be wrongly passed to this constructor and therefore the constructor must be safe against
+	 *    that mistake.
+	 *    
+	 *    TODO: Code quality: Throw {@link IllegalArgumentException} when edition is non-zero so
+	 *    we're guarded against the issue by code, not merely documentation.
+	 * @param nickName The nickname of this OwnIdentity. Can be null if not known yet, i.e. when
+	 *     restoring an OwnIdentity from the network.
 	 * @param publishTrustList Whether this OwnIdentity publishes its trustList or not 
 	 * @throws InvalidParameterException If a given parameter is invalid
-	 * @throws MalformedURLException If insertURI isn't a valid insert URI.
+	 * @throws MalformedURLException If insertURI isn't a valid insert URI or a request URI instead of an insert URI.
 	 */
 	public OwnIdentity (WebOfTrustInterface myWoT, FreenetURI insertURI, String nickName, boolean publishTrustList) throws InvalidParameterException, MalformedURLException {	
 		super(myWoT,
@@ -81,6 +105,12 @@ public final class OwnIdentity extends Identity implements Cloneable, Serializab
             // Should not happen: Class Identity shouldn't store an invalid mRequestURIString
             throw new RuntimeException(e);
         }
+        // Ensure the edition of the insert URI is the same as the one of the request URI which is
+        // stored in the parent class.
+        // Technically we could just set it to 0 because the parent constructor will always set the
+        // request URI's edition 0 (see their and our JavaDoc) - but to be more robust against
+        // future changes it is better to blindly copy the edition without assumptions about its
+        // value.
         normalizedInsertURI = normalizedInsertURI.setSuggestedEdition(requestURI.getEdition());
         mInsertURIString = normalizedInsertURI.toString();
 
@@ -96,21 +126,12 @@ public final class OwnIdentity extends Identity implements Cloneable, Serializab
 		
 		// Don't check for mNickname == null to allow restoring of own identities
 	}
-	
-	/**
-	 * Creates a new OwnIdentity with the given parameters.
-	 * insertURI and requestURI are converted from String to {@link FreenetURI}
-	 * 
-	 * @param insertURI A String representing the key needed to insert this OwnIdentity in Freenet
-	 * @param nickName The nickName of this OwnIdentity
-	 * @param publishTrustList Whether this OwnIdentity publishes its trustList or not 
-	 * @throws InvalidParameterException If a given parameter is invalid
-	 * @throws MalformedURLException If insertURI is not a valid FreenetURI or a request URI instead of an insert URI.
-	 */
+
+	/** @see #OwnIdentity(WebOfTrustInterface, FreenetURI, String, boolean) */
 	public OwnIdentity(WebOfTrustInterface myWoT, String insertURI, String nickName, boolean publishTrustList) throws InvalidParameterException, MalformedURLException {
 		this(myWoT, new FreenetURI(insertURI), nickName, publishTrustList);
 	}
-	
+
 	/**
 	 * NOTICE: When changing this function, please also take care of {@link WebOfTrust.restoreOwnIdentity()}
 	 * 
@@ -424,6 +445,15 @@ public final class OwnIdentity extends Identity implements Cloneable, Serializab
 	@Override
 	public final OwnIdentity clone() {
 		try {
+			// FIXME: Performance: Add constructor which consumes an OwnIdentity so the constructor
+			// doesn't have to validate the passed data anymore. IIRC that slows down clone() a lot
+			// according to my profiling.
+			// IIRC the reason is the constructor's usage of deriveRequestURIFromInsertURI(), though
+			// you might have to profile clone() again, I don't remember the details precisely.
+			// I think the context where I spotted the slowness was profiling of bootstrapping using
+			// the IdentityDownloaderFast/Slow.
+			// Also check if classes Identity, Trust and Score could be improved in the same
+			// fashion.
 			OwnIdentity clone = new OwnIdentity(mWebOfTrust, getInsertURI(), getNickname(), doesPublishTrustList());
 			
 			activateFully(); // For performance only
