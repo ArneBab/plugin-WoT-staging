@@ -114,6 +114,10 @@ public final class IdentityTest extends AbstractJUnit3BaseTest {
 		
 		assertSame(mWoT, identity.getWebOfTrust());
 		
+		// The edition of the URI we provide to the constructor must be ignored for security
+		// reasons: The URI may have been obtained from a remote peer, and they might maliciously
+		// hand out a very high edition number which does not actually exist in order to block the
+		// download of the target Identity indefinitely.
 		assertEquals(new FreenetURI(uri).setSuggestedEdition(0), identity.getRequestURI());
 		
 		assertEquals(FetchState.NotFetched, identity.getCurrentEditionFetchState());
@@ -126,9 +130,10 @@ public final class IdentityTest extends AbstractJUnit3BaseTest {
 		
 		assertEquals(true, identity.doesPublishTrustList());
 		
-		// TODO: Code quality: Test the other constructor(s), currently only tested implicitely by
+		// TODO: Code quality: Test the other constructor(s), currently only tested implicitly by
 		// being called by the one we just tested.
 		// TODO: Code quality: Test with different / invalid parameters
+		// TODO: Code quality: Test handling of a negative edition being passed in the FreenetURI.
 	}
 	
 	public void testInsertRequestUriMixup() throws InvalidParameterException {		

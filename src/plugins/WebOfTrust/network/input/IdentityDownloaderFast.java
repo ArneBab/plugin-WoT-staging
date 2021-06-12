@@ -1055,13 +1055,13 @@ public final class IdentityDownloaderFast implements
 		 *  We do not store a reference to the {@link Identity} object itself due to our child class
 		 *  {@link StopDownloadCommand}:  
 		 *  If the download is to be stopped because the {@link Identity} was deleted from the
-		 *  database then that reference would be nulled on the StopDownloadCommand objects in the
+		 *  database then that reference would be nulled on the StopDownloadCommand object in the
 		 *  database by db4o before the StopDownloadCommand could be processed.
 		 * 
-		 *  NOTICE: The child class {@link StartDownloadCommand} **does** include a pointer to the
+		 *  NOTICE: The child class {@link StartDownloadCommand} **does** include a reference to the
 		 *  Identity object!  
 		 *  Thereby database transactions which query DownloadSchedulerCommand objects from the
-		 *  database must acquire the WebOfTrust lock. */
+		 *  database **must** acquire the WebOfTrust lock! */
 		@IndexedField private final String mIdentityID;
 
 		DownloadSchedulerCommand(WebOfTrust wot, final String identityID) {
@@ -1464,6 +1464,20 @@ public final class IdentityDownloaderFast implements
 			// need closure, just close it here anyway.
 			mOutputQueue.add(new IdentityFileStream(realURI, inputStream));
 			
+			// FIXME: Usability / Performance: mOutputQueue will schedule the IdentityFileProcessor
+			// to process the file we just added with a batching delay of typically 1 minute.
+			// Instead schedule immediate processing of the queue at IdentityFileProcessor:
+			// Batch processing makes no sense for USK subscriptions as editions there typically
+			// aren't downloaded in batches from different Identitys like the IdentityDownloaderSlow
+			// does. Instead, we download editions piece by piece when an Identity uploads a new
+			// one.
+			// And even when first subscribing to an Identity and thus downloading pre-existing
+			// editions, the USKManager will try to only ship us the latest edition, not
+			// intermediate ones (I had specifically requested toad_ to make it do so, which he did
+			// implement IIRC), so batch processing then also makes no sense.
+			// So doing immediate processing will speed up the time it takes for newbie WoT
+			// instances to show remote Identitys beyond the seeds by up to 1 minute.
+			
 			mDownloadedEditions.incrementAndGet();
 		} catch(IOException | RuntimeException | Error e) {
 			mDownloadProcessingFailures.incrementAndGet();
@@ -1618,17 +1632,24 @@ public final class IdentityDownloaderFast implements
 	
 	
 		public IdentityDownloaderFastStatistics() {
-			// FIXME: Fix and document locking the same way as it was done at
-			// IdentityDownloaderSlowStatistics() by the previous commit.
-			synchronized(IdentityDownloaderFast.this.mWoT) { // For getQueuedCommands()
-			synchronized(IdentityDownloaderFast.this) {
+			// WebOfTrust lock: Necessary as we access one of its database tables via
+			//                  getQueuedCommands(): The DownloadSchedulerCommand objects which it
+			//                  returns can contain references to Identity objects.
+			// mLock:           Necessary because we access IdentityDownloaderFast's database table
+			//                  via getQueuedCommands(). Also because we access its member
+			//                  variables.
+			// transactionLock: Necessary because we access the database.
+			synchronized(IdentityDownloaderFast.this.mWoT) {
+			synchronized(IdentityDownloaderFast.this.mLock) {
+			synchronized(Persistent.transactionLock(IdentityDownloaderFast.this.mDB)) {
 				mRunningDownloads = IdentityDownloaderFast.this
 					.mDownloads.size();
 				mScheduledForStartingDownloads = IdentityDownloaderFast.this
 					.getQueuedCommands(StartDownloadCommand.class).size();
 				mScheduledForStoppingDownloads = IdentityDownloaderFast.this
 					.getQueuedCommands(StopDownloadCommand.class).size();
-			}}
+			}}}
+			// AtomicIntegers can be accessed without locking.
 			mDownloadedEditions = IdentityDownloaderFast.this
 				.mDownloadedEditions.get();
 			mDownloadProcessingFailures = IdentityDownloaderFast.this
