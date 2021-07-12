@@ -20,6 +20,7 @@ import java.util.UUID;
 import plugins.WebOfTrust.exceptions.InvalidParameterException;
 import plugins.WebOfTrust.network.input.EditionHint;
 import plugins.WebOfTrust.network.input.IdentityDownloader;
+import plugins.WebOfTrust.network.input.IdentityDownloaderController;
 import plugins.WebOfTrust.util.Base32;
 import plugins.WebOfTrust.util.ReallyCloneable;
 import freenet.keys.FreenetURI;
@@ -98,8 +99,8 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 	/** When obtaining identities through other people's trust lists instead of identity introduction, we store the edition number they have
 	 * specified and pass it as a hint to the USKManager.
 	 * 
-	 * @deprecated
-	 *     Use {@link IdentityDownloader#storeNewEditionHintCommandWithoutCommit(EditionHint)} */
+	 * @deprecated **NOTICE:** Ignored by the new IdentityDownloader API! You **must** instead use
+	 *     {@link IdentityDownloader#storeNewEditionHintCommandWithoutCommit(EditionHint)}. */
 	@Deprecated
 	protected long mLatestEditionHint;
 	
@@ -290,12 +291,19 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 	/**
 	 * Creates an Identity. Only for being used by the WoT package and unit tests, not for user interfaces!
 	 * 
-	 * @param newRequestURI A {@link FreenetURI} to fetch this Identity 
-	 * @param newNickname The nickname of this identity
-	 * @param doesPublishTrustList Whether this identity publishes its trustList or not
-	 * @throws InvalidParameterException if a supplied parameter is invalid
-	 * @throws MalformedURLException if newRequestURI isn't a valid request URI
-	 */
+	 * @param newRequestURI A {@link FreenetURI} to fetch this Identity.  
+	 *    **NOTICE:** The edition of it is NOT used to initialize the edition of this Identity!  
+	 *    It will always be initialized to 0.  
+	 *    You must manually take care of passing the edition as {@link EditionHint} to the
+	 *    {@link IdentityDownloaderController}!
+	 *    
+	 *    The reason for initializing to 0 is security: It prevents remote peers from maliciously
+	 *    causing an Identity to never be downloaded by publishing a very high, non-existent edition
+	 *    in their trust list.
+	 *    
+	 *    TODO: Code quality: Throw {@link IllegalArgumentException} when edition is non-zero so
+	 *    we're guarded against callers having wrong assumptions by code, not merely documentation.
+	 * @param newNickname Can be null if not known yet. */
 	protected Identity(WebOfTrustInterface myWoT, FreenetURI newRequestURI, String newNickname, boolean doesPublishTrustList) throws InvalidParameterException, MalformedURLException {
 		initializeTransient(myWoT);
 		
@@ -307,6 +315,10 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 		
 		try {
 			// We only use the passed edition number as a hint to prevent attackers from spreading bogus very-high edition numbers.
+			// FIXME: mLatestEditionHint is ignored by the new IdentityDownloader API, EditionHint
+			// objects have to be created instead.
+			// Review all callers of this constructor for whether they store an EditionHint object
+			// when they should and pass it to the IdentityDownloaderController then.
 			mLatestEditionHint = Math.max(newRequestURI.getEdition(), 0);
 		} catch (IllegalStateException e) {
 			mLatestEditionHint = 0;
@@ -328,15 +340,7 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 		mProperties = new HashMap<String, String>();
 	}	
 
-	/**
-	 * Creates an Identity. Only for being used by the WoT package and unit tests, not for user interfaces!
-	 * 
-	 * @param newRequestURI A String that will be converted to {@link FreenetURI} before creating the identity
-	 * @param newNickname The nickname of this identity
-	 * @param doesPublishTrustList Whether this identity publishes its trustList or not
-	 * @throws InvalidParameterException if a supplied parameter is invalid
-	 * @throws MalformedURLException if the supplied requestURI isn't a valid request URI
-	 */
+	/** @see #Identity(WebOfTrustInterface, FreenetURI, String, boolean) */
 	public Identity(WebOfTrustInterface myWoT, String newRequestURI, String newNickname, boolean doesPublishTrustList)
 		throws InvalidParameterException, MalformedURLException {
 		
@@ -620,6 +624,13 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
         mRequestURIString = requestURI.toString();
 
 		// TODO: I decided that we should not decrease the edition hint here. Think about that again.
+		// FIXME: This needs to be reconsidered for the new IdentityDownloader API since it uses
+		// external EditionHint objects which are stored in the database to track hints.
+		// It will likely be dealt with by adding a callback to the interface IdentityDownloader
+		// which is called by any code which calls markForRefetch() and thus decreaseEdition(), so
+		// decreaseEdition() needs not do anything with the new API either. And it mustn't do
+		// anything even since the EditionHint object database is managed by the
+		// IdentityDownloaderSlow, outside classes must not interfere with it.
 	}
 	
 	/**
@@ -641,9 +652,28 @@ public class Identity extends Persistent implements ReallyCloneable<Identity>, E
 		checkedActivate(1);
 		// checkedActivate(mCurrentEditionFetchState, 1); not needed, it has no members
 		
+		// TODO: Code quality: Replace the below with switch() statement.
+		
 		if (mCurrentEditionFetchState == FetchState.Fetched) {
 			mCurrentEditionFetchState = FetchState.NotFetched;
 		} else {
+			// The current edition won't be eligible for refetching because it is either not
+			// fetchable or not parseable, so try the previous one.
+			// TODO: Is the NotFetched meaning it is not fetchable actually possible? We don't set
+			// it on DataNotFound for sure so it could only happen if something increments the
+			// edition after a previous one was fetched. But that isn't done anywhere either I
+			// think.
+			// Still it's probably better to just assume it is not fetchable: The worst which can
+			// happen is that we download two editions instead of one, which doesn't hurt given
+			// that markForRefetch() won't be used a lot. And in turn the code is more robust
+			// against changes of how mCurrentEditionFetchState is populated by outside code.
+			
+			assert(mCurrentEditionFetchState == FetchState.NotFetched
+			    || mCurrentEditionFetchState == FetchState.ParsingFailed);
+			
+			if(mCurrentEditionFetchState == FetchState.ParsingFailed)
+				mCurrentEditionFetchState = FetchState.NotFetched;
+			
 			decreaseEdition();
 		}
 	}
